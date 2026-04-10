@@ -1,0 +1,8 @@
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* index.css or App.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
