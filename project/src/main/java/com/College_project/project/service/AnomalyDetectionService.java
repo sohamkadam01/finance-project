@@ -285,38 +285,43 @@ public class AnomalyDetectionService {
     }
     
     // Mark anomaly as fraud
-    @Transactional
-    public void markAsFraud(Long anomalyId, Long userId, String notes) {
-        Anomaly anomaly = anomalyRepository.findById(anomalyId)
+  @Transactional
+public void markAsFraud(Long anomalyId, Long userId, String notes) {
+    Anomaly anomaly = anomalyRepository.findById(anomalyId)
             .orElseThrow(() -> new RuntimeException("Anomaly not found"));
-        
-        if (!anomaly.getUser().getUserId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
-        }
-        
-        anomaly.setFraud(true);
-        anomaly.setResolutionNote(notes);
-        anomalyRepository.save(anomaly);
-        
-        // Also flag the transaction
-        Transaction transaction = anomaly.getTransaction();
+    
+    if (!anomaly.getUser().getUserId().equals(userId)) {
+        throw new RuntimeException("Unauthorized");
+    }
+    
+    anomaly.setFraud(true);
+    anomaly.setResolutionNote(notes);
+    anomaly.setResolvedAt(LocalDateTime.now());  // ✅ Set current time
+    anomalyRepository.save(anomaly);
+    
+    // Also flag the transaction
+    Transaction transaction = anomaly.getTransaction();
+    if (transaction != null) {
         transaction.setFlagged(true);
         transaction.setFlagReason("CONFIRMED FRAUD: " + anomaly.getReason());
         transactionRepository.save(transaction);
     }
-    
-    // Mark anomaly as false alarm
-    @Transactional
-    public void markAsFalseAlarm(Long anomalyId, Long userId, String notes) {
-        Anomaly anomaly = anomalyRepository.findById(anomalyId)
+}
+
+@Transactional
+public void markAsFalseAlarm(Long anomalyId, Long userId, String notes) {
+    Anomaly anomaly = anomalyRepository.findById(anomalyId)
             .orElseThrow(() -> new RuntimeException("Anomaly not found"));
-        
-        if (!anomaly.getUser().getUserId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
-        }
-        
-        anomaly.setFraud(false);
-        anomaly.setResolutionNote(notes);
-        anomalyRepository.save(anomaly);
+    
+    if (!anomaly.getUser().getUserId().equals(userId)) {
+        throw new RuntimeException("Unauthorized");
     }
+    
+    anomaly.setFraud(false);
+    anomaly.setResolutionNote(notes);
+    anomaly.setResolvedAt(LocalDateTime.now());  // ✅ Set current time
+    anomalyRepository.save(anomaly);
+}
+    
+
 }

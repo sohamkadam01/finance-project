@@ -59,7 +59,11 @@ public interface transactionRepository extends JpaRepository<Transaction, Long> 
     // Count transactions in a time period
     long countByUserAndCreatedAtAfter(User user, LocalDateTime dateTime);
     
-    // Advanced filtering with pagination - FIXED: Use org.springframework.data.domain.Page
+    // ✅ ADD THIS METHOD - Count total transactions for a user
+    @Query("SELECT COUNT(t) FROM Transaction t WHERE t.user.userId = :userId")
+    long countByUser(@Param("userId") Long userId);
+    
+    // Advanced filtering with pagination
     @Query("SELECT t FROM Transaction t WHERE t.user = :user " +
            "AND (:search IS NULL OR LOWER(t.description) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "AND (:type IS NULL OR t.type = :type) " +

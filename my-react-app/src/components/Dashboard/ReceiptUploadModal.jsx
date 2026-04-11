@@ -2,11 +2,9 @@
 
 import React, { useState, useRef } from 'react';
 import { 
-  X, Upload, FileText, Loader2, CheckCircle, AlertCircle, 
-  Image, Camera, Trash2, Eye 
+  X, Upload, FileText, Loader2, CheckCircle, AlertCircle
 } from 'lucide-react';
 import axios from 'axios';
-import { ocrAPI } from '../../services/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
@@ -27,6 +25,8 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
     setResult(null);
     setError('');
     setStep('upload');
+    setUploading(false);
+    setProcessing(false);
     onClose();
   };
 
@@ -71,6 +71,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
     }
 
     setUploading(true);
+    setProcessing(true);
     setError('');
     setStep('processing');
 
@@ -80,7 +81,11 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       const token = localStorage.getItem('token');
       
-      // Step 1: Extract text from image (using /extract endpoint)
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+      
+      // Step 1: Extract text from image
       const extractResponse = await axios.post(
         `${API_BASE_URL}/ocr/extract`,
         formData,
@@ -92,13 +97,16 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
         }
       );
 
-      console.log('Extract response:', extractResponse.data);
+      console.log('=== EXTRACT RESPONSE ===');
+      console.log('Success:', extractResponse.data.success);
+      console.log('Document ID:', extractResponse.data.documentId);
+      console.log('Extracted text length:', extractResponse.data.extracted_text?.length);
 
-      if (extractResponse.data.success) {
+      if (extractResponse.data.success && extractResponse.data.documentId) {
         const documentId = extractResponse.data.documentId;
-        const extractedText = extractResponse.data.extracted_text;
+        const extractedText = extractResponse.data.extracted_text || '';
         
-        // Step 2: Process the extracted text (using /process endpoint)
+        // Step 2: Process the extracted text
         const processResponse = await axios.post(
           `${API_BASE_URL}/ocr/process/${documentId}`,
           {},
@@ -110,7 +118,10 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
           }
         );
 
-        console.log('Process response:', processResponse.data);
+        console.log('=== PROCESS RESPONSE ===');
+        console.log('Success:', processResponse.data.success);
+        console.log('Summary:', processResponse.data.summary);
+        console.log('Transactions Created:', processResponse.data.transactionsCreated);
 
         if (processResponse.data.success) {
           setResult({
@@ -133,9 +144,16 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
         setStep('upload');
       }
     } catch (err) {
-      console.error('Upload error:', err);
-      console.error('Error details:', err.response?.data);
-      setError(err.response?.data?.message || err.response?.data?.error || 'Failed to process receipt. Please try again.');
+      console.error('=== ERROR DETAILS ===');
+      console.error('Status:', err.response?.status);
+      console.error('Error:', err.response?.data);
+      console.error('Message:', err.message);
+      
+      if (err.response?.status === 401) {
+        setError('Session expired. Please login again.');
+      } else {
+        setError(err.response?.data?.message || err.response?.data?.error || 'Failed to process receipt. Please try again.');
+      }
       setStep('upload');
     } finally {
       setUploading(false);
@@ -323,7 +341,9 @@ const ReceiptUploadModal = ({ isOpen, onClose, onSuccess }) => {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Amount</p>
-                      <p className="font-medium text-gray-900">₹{result.extractedAmount || 'N/A'}</p>
+                      <p className="font-medium text-gray-900">
+                        {result.extractedAmount ? `₹${result.extractedAmount}` : 'N/A'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Date</p>

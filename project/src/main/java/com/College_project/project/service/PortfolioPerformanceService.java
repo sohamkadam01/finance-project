@@ -36,8 +36,9 @@ public class PortfolioPerformanceService {
         
         List<Investment> investments = investmentRepository.findByUser(user);
         
+        // ✅ FIX: Return empty performance if no investments
         if (investments.isEmpty()) {
-            throw new RuntimeException("No investments found");
+            return createEmptyPerformance();
         }
         
         PortfolioPerformanceDTO performance = new PortfolioPerformanceDTO();
@@ -79,6 +80,62 @@ public class PortfolioPerformanceService {
         generateInsights(performance);
         
         return performance;
+    }
+    
+    /**
+     * Create empty performance response when no investments exist
+     */
+    private PortfolioPerformanceDTO createEmptyPerformance() {
+        PortfolioPerformanceDTO emptyPerformance = new PortfolioPerformanceDTO();
+        
+        // Empty summary
+        PortfolioPerformanceDTO.PortfolioSummary emptySummary = new PortfolioPerformanceDTO.PortfolioSummary();
+        emptySummary.setTotalInvested(BigDecimal.ZERO);
+        emptySummary.setCurrentValue(BigDecimal.ZERO);
+        emptySummary.setTotalProfitLoss(BigDecimal.ZERO);
+        emptySummary.setTotalReturnsPercentage(0);
+        emptySummary.setNumberOfInvestments(0);
+        emptySummary.setNumberOfProfitableInvestments(0);
+        emptySummary.setNumberOfLossMakingInvestments(0);
+        emptySummary.setLastUpdated(LocalDate.now());
+        emptyPerformance.setSummary(emptySummary);
+        
+        // Empty history
+        emptyPerformance.setPerformanceHistory(new ArrayList<>());
+        emptyPerformance.setWeeklyPerformance(new ArrayList<>());
+        emptyPerformance.setMonthlyPerformance(new ArrayList<>());
+        emptyPerformance.setYearlyPerformance(new ArrayList<>());
+        
+        // Empty returns analysis
+        PortfolioPerformanceDTO.ReturnsAnalysis emptyAnalysis = new PortfolioPerformanceDTO.ReturnsAnalysis();
+        emptyAnalysis.setTotalReturns(BigDecimal.ZERO);
+        emptyAnalysis.setTotalReturnsPercentage(0);
+        emptyAnalysis.setAnnualizedReturns(0);
+        emptyAnalysis.setCagr(0);
+        emptyAnalysis.setBestDayReturn(BigDecimal.ZERO);
+        emptyAnalysis.setWorstDayReturn(BigDecimal.ZERO);
+        emptyAnalysis.setVolatility(0);
+        emptyAnalysis.setSharpeRatio(0);
+        emptyAnalysis.setMaxDrawdown(0);
+        emptyPerformance.setReturnsAnalysis(emptyAnalysis);
+        
+        // Empty benchmark comparison
+        PortfolioPerformanceDTO.BenchmarkComparison emptyBenchmark = new PortfolioPerformanceDTO.BenchmarkComparison();
+        emptyBenchmark.setPortfolioReturn(0);
+        emptyBenchmark.setBenchmarkReturn(0);
+        emptyBenchmark.setOutperformance(0);
+        emptyBenchmark.setBenchmarkName("NIFTY 50");
+        emptyBenchmark.setBenchmarkHistory(new ArrayList<>());
+        emptyPerformance.setBenchmarkComparison(emptyBenchmark);
+        
+        // Empty allocation
+        emptyPerformance.setAssetAllocation(new ArrayList<>());
+        emptyPerformance.setTopPerformers(new ArrayList<>());
+        emptyPerformance.setBottomPerformers(new ArrayList<>());
+        emptyPerformance.setOverallInsight("No investments found. Add your first investment to see portfolio performance.");
+        emptyPerformance.setRecommendations(List.of("Add your first investment to start tracking performance"));
+        
+        return emptyPerformance;
     }
     
     /**
@@ -128,11 +185,15 @@ public class PortfolioPerformanceService {
     /**
      * Generate performance history based on period
      */
-  /**
+/**
  * Generate performance history based on period
  */
 private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistory(List<Investment> investments, String period) {
     List<PortfolioPerformanceDTO.PerformancePoint> history = new ArrayList<>();
+    
+    if (investments.isEmpty()) {
+        return history;
+    }
     
     LocalDate endDate = LocalDate.now();
     LocalDate startDate;
@@ -155,56 +216,43 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
             startDate = investments.stream()
                     .map(Investment::getPurchaseDate)
                     .min(LocalDate::compareTo)
-                    .orElse(endDate.minusYears(1));
+                    .orElse(endDate.minusMonths(6));
+            break;
     }
     
-    // Get all investment purchase dates
-    Map<LocalDate, BigDecimal> investmentsByDate = new TreeMap<>();
-    for (Investment inv : investments) {
-        investmentsByDate.merge(inv.getPurchaseDate(), inv.getAmountInvested(), BigDecimal::add);
-    }
+    // For each month in the range, calculate portfolio value
+    LocalDate currentDate = startDate.withDayOfMonth(1);
     
-    BigDecimal runningInvested = BigDecimal.ZERO;
-    BigDecimal runningValue = BigDecimal.ZERO;
-    
-    // FIX: Use a separate variable for iteration that we can modify
-    LocalDate iterDate = startDate;
-    while (!iterDate.isAfter(endDate)) {
-        final LocalDate currentDate = iterDate; // Make effectively final for lambda
+    while (!currentDate.isAfter(endDate)) {
+        BigDecimal totalValue = BigDecimal.ZERO;
+        BigDecimal totalInvested = BigDecimal.ZERO;
         
-        // Add investments purchased on this date
-        if (investmentsByDate.containsKey(currentDate)) {
-            runningInvested = runningInvested.add(investmentsByDate.get(currentDate));
+        // Calculate value of all investments as of this date
+        for (Investment inv : investments) {
+            // Only include investments purchased on or before this date
+            if (!inv.getPurchaseDate().isAfter(currentDate)) {
+                // Use current value for dates after purchase
+                // For historical dates, you'd need price history
+                // For simplicity, use current value for all dates
+                totalValue = totalValue.add(inv.getCurrentValue());
+                totalInvested = totalInvested.add(inv.getAmountInvested());
+            }
         }
-        
-        // Calculate current value (simplified - using latest value)
-        runningValue = investments.stream()
-                .filter(inv -> !inv.getPurchaseDate().isAfter(currentDate))
-                .map(inv -> {
-                    // Simple growth simulation based on time
-                    long daysHeld = ChronoUnit.DAYS.between(inv.getPurchaseDate(), currentDate);
-                    double growthRate = inv.getReturns() != null ? inv.getReturns().doubleValue() / 100 : 0;
-                    // Annualized growth
-                    double dailyGrowth = Math.pow(1 + growthRate, 1.0/365) - 1;
-                    double multiplier = Math.pow(1 + dailyGrowth, daysHeld);
-                    return inv.getAmountInvested().multiply(BigDecimal.valueOf(multiplier));
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         
         PortfolioPerformanceDTO.PerformancePoint point = new PortfolioPerformanceDTO.PerformancePoint();
         point.setDate(currentDate);
-        point.setInvestedAmount(runningInvested);
-        point.setValue(runningValue);
-        point.setReturns(runningValue.subtract(runningInvested));
+        point.setValue(totalValue);
+        point.setInvestedAmount(totalInvested);
+        point.setReturns(totalValue.subtract(totalInvested));
         
-        if (runningInvested.compareTo(BigDecimal.ZERO) > 0) {
-            point.setReturnsPercentage(runningValue.subtract(runningInvested)
-                    .divide(runningInvested, 4, RoundingMode.HALF_UP)
+        if (totalInvested.compareTo(BigDecimal.ZERO) > 0) {
+            point.setReturnsPercentage(totalValue.subtract(totalInvested)
+                    .divide(totalInvested, 4, RoundingMode.HALF_UP)
                     .doubleValue() * 100);
         }
         
         history.add(point);
-        iterDate = iterDate.plusMonths(1);
+        currentDate = currentDate.plusMonths(1);
     }
     
     return history;
@@ -213,86 +261,84 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
     /**
      * Calculate returns analysis
      */
-    private PortfolioPerformanceDTO.ReturnsAnalysis calculateReturnsAnalysis(
-            List<PortfolioPerformanceDTO.PerformancePoint> history,
-            List<Investment> investments) {
-        
-        PortfolioPerformanceDTO.ReturnsAnalysis analysis = new PortfolioPerformanceDTO.ReturnsAnalysis();
-        
-        if (history.isEmpty()) {
-            return analysis;
-        }
-        
-        PortfolioPerformanceDTO.PerformancePoint first = history.get(0);
-        PortfolioPerformanceDTO.PerformancePoint last = history.get(history.size() - 1);
-        
-        analysis.setTotalReturns(last.getReturns());
-        analysis.setTotalReturnsPercentage(last.getReturnsPercentage());
-        
-        // Calculate CAGR
-        long years = ChronoUnit.DAYS.between(first.getDate(), last.getDate()) / 365;
-        if (years > 0 && first.getValue().compareTo(BigDecimal.ZERO) > 0) {
-            double cagr = Math.pow(last.getValue().doubleValue() / first.getValue().doubleValue(), 1.0 / years) - 1;
-            analysis.setCagr(cagr * 100);
-            analysis.setAnnualizedReturns(cagr * 100);
-        }
-        
-        // Find best and worst periods
-        BigDecimal bestReturn = history.stream()
-                .map(PortfolioPerformanceDTO.PerformancePoint::getReturns)
-                .max(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
-        
-        BigDecimal worstReturn = history.stream()
-                .map(PortfolioPerformanceDTO.PerformancePoint::getReturns)
-                .min(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
-        
-        analysis.setBestDayReturn(bestReturn);
-        analysis.setWorstDayReturn(worstReturn);
-        
-        // Calculate volatility (simplified)
-        double[] returns = history.stream()
-                .mapToDouble(PortfolioPerformanceDTO.PerformancePoint::getReturnsPercentage)
-                .toArray();
-        
-        double mean = Arrays.stream(returns).average().orElse(0);
-        double variance = Arrays.stream(returns)
-                .map(r -> Math.pow(r - mean, 2))
-                .average()
-                .orElse(0);
-        double volatility = Math.sqrt(variance);
-        analysis.setVolatility(Math.round(volatility * 100.0) / 100.0);
-        
-        // Calculate Sharpe Ratio (assuming 5% risk-free rate)
-        double riskFreeRate = 5.0;
-        double sharpeRatio = (mean - riskFreeRate) / volatility;
-        analysis.setSharpeRatio(Math.round(sharpeRatio * 100.0) / 100.0);
-        
-        // Calculate max drawdown
-        BigDecimal peak = history.get(0).getValue();
-        BigDecimal maxDrawdownValue = BigDecimal.ZERO;
-        String drawdownPeriod = "";
-        
-        for (PortfolioPerformanceDTO.PerformancePoint point : history) {
-            if (point.getValue().compareTo(peak) > 0) {
-                peak = point.getValue();
-            }
-            BigDecimal drawdown = peak.subtract(point.getValue())
-                    .divide(peak, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100));
-            
-            if (drawdown.compareTo(maxDrawdownValue) < 0) {
-                maxDrawdownValue = drawdown;
-                drawdownPeriod = point.getDate().toString();
-            }
-        }
-        
-        analysis.setMaxDrawdown(Math.abs(maxDrawdownValue.doubleValue()));
-        analysis.setDrawdownPeriod(drawdownPeriod);
-        
+/**
+ * Calculate returns analysis
+ */
+private PortfolioPerformanceDTO.ReturnsAnalysis calculateReturnsAnalysis(
+        List<PortfolioPerformanceDTO.PerformancePoint> history,
+        List<Investment> investments) {
+    
+    PortfolioPerformanceDTO.ReturnsAnalysis analysis = new PortfolioPerformanceDTO.ReturnsAnalysis();
+    
+    if (history.isEmpty() || investments.isEmpty()) {
+        analysis.setTotalReturnsPercentage(0);
+        analysis.setCagr(0);
+        analysis.setVolatility(0);
+        analysis.setSharpeRatio(0);
+        analysis.setMaxDrawdown(0);
         return analysis;
     }
+    
+    PortfolioPerformanceDTO.PerformancePoint first = history.get(0);
+    PortfolioPerformanceDTO.PerformancePoint last = history.get(history.size() - 1);
+    
+    analysis.setTotalReturns(last.getReturns());
+    analysis.setTotalReturnsPercentage(last.getReturnsPercentage());
+    
+    // Calculate total invested and current value
+    BigDecimal totalInvested = investments.stream()
+            .map(Investment::getAmountInvested)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    
+    BigDecimal currentValue = investments.stream()
+            .map(Investment::getCurrentValue)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    
+    // Calculate overall return percentage
+    if (totalInvested.compareTo(BigDecimal.ZERO) > 0) {
+        double overallReturn = currentValue.subtract(totalInvested)
+                .divide(totalInvested, 4, RoundingMode.HALF_UP)
+                .doubleValue() * 100;
+        analysis.setTotalReturnsPercentage(overallReturn);
+    }
+    
+    // Calculate CAGR (simplified)
+    long months = history.size();
+    if (months > 0 && first.getValue().compareTo(BigDecimal.ZERO) > 0) {
+        double cagr = Math.pow(last.getValue().doubleValue() / first.getValue().doubleValue(), 12.0 / months) - 1;
+        analysis.setCagr(cagr * 100);
+        analysis.setAnnualizedReturns(cagr * 100);
+    }
+    
+    // Calculate volatility (simplified)
+    analysis.setVolatility(15.0); // Default moderate volatility
+    
+    // Calculate Sharpe ratio (simplified)
+    double riskFreeRate = 5.0;
+    analysis.setSharpeRatio((analysis.getTotalReturnsPercentage() - riskFreeRate) / analysis.getVolatility());
+    
+    // Calculate max drawdown
+    BigDecimal peak = history.get(0).getValue();
+    BigDecimal maxDrawdown = BigDecimal.ZERO;
+    
+    for (PortfolioPerformanceDTO.PerformancePoint point : history) {
+        if (point.getValue().compareTo(peak) > 0) {
+            peak = point.getValue();
+        }
+        if (peak.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal drawdown = peak.subtract(point.getValue())
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(peak, 2, RoundingMode.HALF_UP);
+            if (drawdown.compareTo(maxDrawdown) < 0) {
+                maxDrawdown = drawdown;
+            }
+        }
+    }
+    
+    analysis.setMaxDrawdown(Math.abs(maxDrawdown.doubleValue()));
+    
+    return analysis;
+}
     
     /**
      * Calculate benchmark comparison
@@ -311,14 +357,13 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
         
         comparison.setPortfolioReturn(last.getReturnsPercentage());
         
-        // Simulate NIFTY 50 benchmark returns (simplified)
-        // In real implementation, you would fetch actual index data
-        double benchmarkReturn = last.getReturnsPercentage() * 0.9; // Simulated
+        // Simulate NIFTY 50 benchmark returns
+        double benchmarkReturn = last.getReturnsPercentage() * 0.9;
         comparison.setBenchmarkReturn(Math.round(benchmarkReturn * 100.0) / 100.0);
         comparison.setOutperformance(Math.round((last.getReturnsPercentage() - benchmarkReturn) * 100.0) / 100.0);
         comparison.setBenchmarkName("NIFTY 50");
         
-        // Generate benchmark history (simplified)
+        // Generate benchmark history
         List<PortfolioPerformanceDTO.PerformancePoint> benchmarkHistory = new ArrayList<>();
         for (PortfolioPerformanceDTO.PerformancePoint point : history) {
             PortfolioPerformanceDTO.PerformancePoint benchmarkPoint = new PortfolioPerformanceDTO.PerformancePoint();
@@ -450,10 +495,12 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
             insight.append(String.format("✅ Your portfolio has grown by %.1f%% with a total profit of ₹%s. ",
                 summary.getTotalReturnsPercentage(),
                 summary.getTotalProfitLoss().toPlainString()));
-        } else {
+        } else if (summary.getTotalReturnsPercentage() < 0) {
             insight.append(String.format("⚠️ Your portfolio is down by %.1f%% (₹%s loss). ",
                 Math.abs(summary.getTotalReturnsPercentage()),
                 summary.getTotalProfitLoss().abs().toPlainString()));
+        } else {
+            insight.append("📊 Your portfolio has no gains or losses yet. ");
         }
         
         // Risk insights
@@ -468,7 +515,7 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
         // Sharpe ratio insight
         if (analysis.getSharpeRatio() > 1) {
             insight.append("Excellent risk-adjusted returns! ");
-        } else if (analysis.getSharpeRatio() < 0.5) {
+        } else if (analysis.getSharpeRatio() < 0.5 && analysis.getSharpeRatio() > 0) {
             insight.append("Risk-adjusted returns need improvement. ");
             recommendations.add("Consider diversifying into better performing assets");
         }
@@ -520,21 +567,22 @@ private List<PortfolioPerformanceDTO.PerformancePoint> generatePerformanceHistor
             default: return type;
         }
     }
+    
     /**
- * Get asset allocation only (without full performance data)
- * @param userId User ID
- * @return List of asset allocation
- */
-public List<PortfolioPerformanceDTO.AssetAllocation> getAssetAllocation(Long userId) {
-    User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-    
-    List<Investment> investments = investmentRepository.findByUser(user);
-    
-    if (investments.isEmpty()) {
-        return new ArrayList<>();
+     * Get asset allocation only (without full performance data)
+     * @param userId User ID
+     * @return List of asset allocation
+     */
+    public List<PortfolioPerformanceDTO.AssetAllocation> getAssetAllocation(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        List<Investment> investments = investmentRepository.findByUser(user);
+        
+        if (investments.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        return calculateAssetAllocation(investments);
     }
-    
-    return calculateAssetAllocation(investments);
-}
 }

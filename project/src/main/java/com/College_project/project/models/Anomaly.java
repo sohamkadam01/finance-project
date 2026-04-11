@@ -1,11 +1,13 @@
 package com.College_project.project.models;
 
 import com.College_project.project.enums.AnomalySeverity;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "anomalies")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Anomaly {
     
     @Id
@@ -20,7 +22,7 @@ public class Anomaly {
     @JoinColumn(name = "transaction_id")
     private Transaction transaction;
     
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String reason;
     
     @Enumerated(EnumType.STRING)
@@ -30,7 +32,9 @@ public class Anomaly {
     
     private LocalDateTime reportedAt;
     
-    private String resolvedAt;
+    private LocalDateTime resolvedAt;  // ✅ Changed from String to LocalDateTime
+    
+    @Column(length = 500)
     private String resolutionNote;
     
     // Constructors
@@ -48,30 +52,75 @@ public class Anomaly {
     }
     
     // Getters and Setters
-    public Long getAnomalyId() { return anomalyId; }
-    public void setAnomalyId(Long anomalyId) { this.anomalyId = anomalyId; }
+    public Long getAnomalyId() {
+        return anomalyId;
+    }
     
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public void setAnomalyId(Long anomalyId) {
+        this.anomalyId = anomalyId;
+    }
     
-    public Transaction getTransaction() { return transaction; }
-    public void setTransaction(Transaction transaction) { this.transaction = transaction; }
+    public User getUser() {
+        return user;
+    }
     
-    public String getReason() { return reason; }
-    public void setReason(String reason) { this.reason = reason; }
+    public void setUser(User user) {
+        this.user = user;
+    }
     
-    public AnomalySeverity getSeverity() { return severity; }
-    public void setSeverity(AnomalySeverity severity) { this.severity = severity; }
+    public Transaction getTransaction() {
+        return transaction;
+    }
     
-    public boolean isFraud() { return isFraud; }
-    public void setFraud(boolean fraud) { isFraud = fraud; }
+    public void setTransaction(Transaction transaction) {
+        this.transaction = transaction;
+    }
     
-    public LocalDateTime getReportedAt() { return reportedAt; }
-    public void setReportedAt(LocalDateTime reportedAt) { this.reportedAt = reportedAt; }
+    public String getReason() {
+        return reason;
+    }
     
-    public String getResolvedAt() { return resolvedAt; }
-    public void setResolvedAt(String resolvedAt) { this.resolvedAt = resolvedAt; }
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
     
-    public String getResolutionNote() { return resolutionNote; }
-    public void setResolutionNote(String resolutionNote) { this.resolutionNote = resolutionNote; }
+    public AnomalySeverity getSeverity() {
+        return severity;
+    }
+    
+    public void setSeverity(AnomalySeverity severity) {
+        this.severity = severity;
+    }
+    
+    public boolean isFraud() {
+        return isFraud;
+    }
+    
+    public void setFraud(boolean fraud) {
+        isFraud = fraud;
+    }
+    
+    public LocalDateTime getReportedAt() {
+        return reportedAt;
+    }
+    
+    public void setReportedAt(LocalDateTime reportedAt) {
+        this.reportedAt = reportedAt;
+    }
+    
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
+    
+    public void setResolvedAt(LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
+    }
+    
+    public String getResolutionNote() {
+        return resolutionNote;
+    }
+    
+    public void setResolutionNote(String resolutionNote) {
+        this.resolutionNote = resolutionNote;
+    }
 }

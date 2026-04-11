@@ -26,7 +26,12 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import pytesseract
 from pathlib import Path
+import sys
 
+# At the start of your application:
+# if sys.platform == 'win32':
+#     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+#     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 # ------------------- CONFIG -------------------
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB

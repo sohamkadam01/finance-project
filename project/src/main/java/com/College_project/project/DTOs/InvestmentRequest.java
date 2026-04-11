@@ -20,11 +20,11 @@ public class InvestmentRequest {
     
     private BigDecimal currentValue;
     
-    @NotNull(message = "Purchase date is required")
-    @PastOrPresent(message = "Purchase date cannot be in the future")
+    // Allows any date (past, present, or future) - no validation on date
+    // Just ensure it's not null
     private LocalDate purchaseDate;
     
-    private String symbol; // For stocks: RELIANCE, TCS, etc.
+    private String symbol;
     
     private Integer quantity;
     

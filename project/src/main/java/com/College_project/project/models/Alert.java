@@ -1,11 +1,13 @@
 package com.College_project.project.models;
 
 import com.College_project.project.enums.AlertType;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import com.College_project.project.models.User;
+
 @Entity
 @Table(name = "alerts")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Alert {
     
     @Id
@@ -19,7 +21,7 @@ public class Alert {
     @Enumerated(EnumType.STRING)
     private AlertType type;
     
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1000)
     private String message;
     
     private boolean isRead = false;

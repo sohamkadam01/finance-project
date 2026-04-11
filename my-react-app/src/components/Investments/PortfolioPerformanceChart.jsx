@@ -1,7 +1,7 @@
 import React from 'react';
+import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'; // Combined import statement
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
 const PortfolioPerformanceChart = ({ performance, loading, period }) => {
@@ -27,9 +27,9 @@ const PortfolioPerformanceChart = ({ performance, loading, period }) => {
 
   const chartData = performance.performanceHistory.map(point => ({
     date: new Date(point.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-    value: point.value,
-    invested: point.investedAmount,
-    returns: point.returns
+    value: point.value ?? point.currentValue ?? 0,
+    invested: point.investedAmount ?? point.amountInvested ?? point.invested ?? 0,
+    returns: point.returns ?? point.profitLoss ?? 0
   }));
 
   const formatYAxis = (value) => {
@@ -83,6 +83,10 @@ const PortfolioPerformanceChart = ({ performance, loading, period }) => {
                   <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15}/>
                   <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
                 </linearGradient>
+                <linearGradient id="investedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.1}/>
+                  <stop offset="100%" stopColor="#94a3b8" stopOpacity={0}/>
+                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis 
@@ -100,7 +104,19 @@ const PortfolioPerformanceChart = ({ performance, loading, period }) => {
                 width={60}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e5e7eb', strokeWidth: 1 }} />
+              <Legend verticalAlign="top" height={36}/>
               <Area 
+                name="Invested Amount"
+                type="monotone" 
+                dataKey="invested" 
+                stroke="#94a3b8" 
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                fill="url(#investedGradient)"
+                animationDuration={1000}
+              />
+              <Area 
+                name="Portfolio Value"
                 type="monotone" 
                 dataKey="value" 
                 stroke="#3b82f6" 

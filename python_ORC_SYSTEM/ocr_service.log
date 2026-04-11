@@ -29,3 +29,53 @@
 2026-04-09 18:14:22,672 - ocr_service - INFO - [fc76156b] Returning cached result
 2026-04-09 18:22:07,850 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
 2026-04-09 18:22:07,853 - ocr_service - INFO - [d9406d05] Returning cached result
+2026-04-11 00:33:47,127 - __main__ - INFO - Loading OCR models...
+2026-04-11 00:34:33,859 - __mp_main__ - INFO - Loading OCR models...
+2026-04-11 00:34:45,729 - ocr_service - INFO - Loading OCR models...
+2026-04-11 00:35:53,104 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 00:35:53,104 - ocr_service - INFO - [701e01cd] Returning cached result
+2026-04-11 00:36:22,479 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 00:36:22,484 - ocr_service - INFO - [539596aa] Returning cached result
+2026-04-11 00:38:04,204 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 00:38:04,204 - ocr_service - INFO - [246e306a] Returning cached result
+2026-04-11 00:39:03,042 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 00:39:03,043 - ocr_service - INFO - [6ceeaa3b] Returning cached result
+2026-04-11 00:40:11,138 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 00:40:11,138 - ocr_service - INFO - [a41f58fb] Returning cached result
+2026-04-11 00:44:13,786 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 00:44:13,788 - ocr_service - INFO - [1b5b8da0] Returning cached result
+2026-04-11 00:48:23,180 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 00:48:23,193 - ocr_service - INFO - [80ad3aa9] Returning cached result
+2026-04-11 00:49:04,492 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 00:49:04,493 - ocr_service - INFO - [bd0d09d8] Returning cached result
+2026-04-11 00:50:06,740 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 00:50:07,127 - ocr_service - INFO - [839b95f4] Returning cached result
+2026-04-11 05:41:54,951 - __main__ - INFO - Loading OCR models...
+2026-04-11 05:42:21,239 - __mp_main__ - INFO - Loading OCR models...
+2026-04-11 05:42:30,641 - ocr_service - INFO - Loading OCR models...
+2026-04-11 05:46:17,416 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 05:46:17,418 - ocr_service - INFO - [9f251ab3] Returning cached result
+2026-04-11 05:47:33,883 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 05:47:33,885 - ocr_service - INFO - [bfe5f50c] Returning cached result
+2026-04-11 05:48:30,783 - ocr_service - INFO - Shutting down OCR service...
+2026-04-11 05:48:30,784 - ocr_service - INFO - OCR service stopped
+2026-04-11 05:50:17,416 - __main__ - INFO - Loading OCR models...
+2026-04-11 05:50:33,930 - __mp_main__ - INFO - Loading OCR models...
+2026-04-11 05:50:39,196 - ocr_service - INFO - Loading OCR models...
+2026-04-11 05:56:34,469 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 05:56:34,470 - ocr_service - INFO - [0369377d] Returning cached result
+2026-04-11 06:06:04,136 - ocr_service - INFO - Cache hit for key: fb88b3acce26e98c957b8735551c21cf
+2026-04-11 06:06:04,137 - ocr_service - INFO - [7c00972d] Returning cached result
+2026-04-11 06:11:16,302 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 06:11:16,317 - ocr_service - INFO - [d6d4d427] Returning cached result
+2026-04-11 06:24:34,468 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 06:24:34,468 - ocr_service - INFO - [914bc646] Returning cached result
+2026-04-11 06:53:50,833 - ocr_service - INFO - Cache hit for key: 292501e635a07062b1a4c0261e854be8
+2026-04-11 06:53:50,833 - ocr_service - INFO - [7e6b9ac6] Returning cached result
+2026-04-11 06:58:08,555 - ocr_service - INFO - Shutting down OCR service...
+2026-04-11 06:58:08,855 - ocr_service - INFO - OCR service stopped
+2026-04-11 07:05:00,248 - __main__ - INFO - Loading OCR models...
+2026-04-11 07:07:55,104 - __mp_main__ - INFO - Loading OCR models...
+2026-04-11 07:08:02,799 - ocr_service - INFO - Loading OCR models...
+2026-04-11 07:28:52,745 - __main__ - INFO - Loading OCR models...
+2026-04-11 07:32:11,997 - __mp_main__ - INFO - Loading OCR models...

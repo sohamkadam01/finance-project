@@ -18,7 +18,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -107,14 +106,13 @@ public class OcrTextParserService {
                                ", Bank=" + defaultAccount.getBankName() +
                                ", Balance=₹" + defaultAccount.getCurrentBalance());
             
-            // Step 1: Clean and normalize the text
+            // ✅ FIXED: Use cleanText method (not normalizeText)
             String cleanedText = cleanText(text);
-            System.out.println("Cleaned text preview: " + cleanedText.substring(0, Math.min(500, cleanedText.length())));
             
-            // Step 2: Extract all possible information
+            // Extract all information
             ParsedData parsedData = extractAllData(cleanedText);
             
-            // Step 3: Set results
+            // Set results
             result.setVendorName(parsedData.vendorName);
             result.setTransactionDate(parsedData.transactionDate);
             result.setTotalAmount(parsedData.amount);
@@ -127,11 +125,10 @@ public class OcrTextParserService {
             System.out.println("Receipt Type: " + parsedData.receiptType);
             System.out.println("Line Items Found: " + parsedData.lineItems.size());
             
-            // Step 4: Create transaction if amount found
+            // Create transaction if amount found
             if (parsedData.amount != null && parsedData.amount.compareTo(BigDecimal.ZERO) > 0) {
                 Transaction transaction = createTransactionWithRetry(
-                    user, defaultAccount, parsedData, cleanedText
-                );
+                    user, defaultAccount, parsedData, cleanedText);
                 
                 if (transaction != null) {
                     List<Transaction> createdList = new ArrayList<>();
@@ -147,7 +144,7 @@ public class OcrTextParserService {
                 result.setErrorMessage("No valid amount could be extracted from this document");
             }
             
-            // Step 5: Update document status
+            // Update document status
             updateDocumentStatus(document, parsedData, result.getErrorMessage() == null);
             
             System.out.println("========== OCR PROCESSING COMPLETED ==========");
@@ -179,19 +176,10 @@ public class OcrTextParserService {
     private ParsedData extractAllData(String text) {
         ParsedData data = new ParsedData();
         
-        // Extract vendor name
         data.vendorName = extractVendorName(text);
-        
-        // Extract date
         data.transactionDate = extractDate(text);
-        
-        // Extract amount using multiple patterns
         data.amount = extractAmountWithMultiplePatterns(text);
-        
-        // Extract line items
         data.lineItems = extractLineItems(text);
-        
-        // Detect receipt type
         data.receiptType = detectReceiptType(text);
         
         return data;
@@ -236,7 +224,7 @@ public class OcrTextParserService {
             }
         }
         
-        // Strategy 3: Look for large numbers (likely transaction amounts)
+        // Strategy 3: Look for large numbers
         Pattern largeNumberPattern = Pattern.compile("\\b(\\d{4,})\\b");
         Matcher numberMatcher = largeNumberPattern.matcher(text);
         while (numberMatcher.find()) {
@@ -255,15 +243,9 @@ public class OcrTextParserService {
             return null;
         }
         
-        // Return the most reasonable amount (largest, but not too large)
-        return foundAmounts.stream()
-                .max(BigDecimal::compareTo)
-                .orElse(null);
+        return foundAmounts.stream().max(BigDecimal::compareTo).orElse(null);
     }
     
-    /**
-     * Validate if amount is reasonable for a transaction
-     */
     private boolean isValidAmount(BigDecimal amount) {
         return amount.compareTo(new BigDecimal("10")) >= 0 && 
                amount.compareTo(new BigDecimal("10000000")) <= 0;
@@ -276,20 +258,14 @@ public class OcrTextParserService {
         List<ExtractedTransaction> items = new ArrayList<>();
         String[] lines = text.split("\\n");
         
-        // Pattern for item with price: "Item Name ₹199" or "Item Name 199"
         Pattern itemPattern = Pattern.compile("^(.+?)\\s+(?:₹|Rs\\.?)?\\s*(\\d+(?:[,\\.]\\d{2})?)$");
-        
-        // Pattern for item with quantity: "2 x ₹150 = ₹300"
         Pattern quantityPattern = Pattern.compile("(\\d+)\\s*[xX]\\s*(?:₹|Rs\\.?)\\s*(\\d+(?:[,\\.]\\d{2})?)");
         
         for (String line : lines) {
             line = line.trim();
             if (line.isEmpty() || line.length() < 5) continue;
-            
-            // Skip header/footer lines
             if (isNonItemLine(line)) continue;
             
-            // Check for quantity pattern
             Matcher qtyMatcher = quantityPattern.matcher(line);
             if (qtyMatcher.find()) {
                 ExtractedTransaction item = new ExtractedTransaction();
@@ -301,13 +277,10 @@ public class OcrTextParserService {
                     item.setUnitPrice(price);
                     item.setType(TransactionType.EXPENSE);
                     items.add(item);
-                } catch (NumberFormatException e) {
-                    // Skip
-                }
+                } catch (NumberFormatException e) {}
                 continue;
             }
             
-            // Check for regular item pattern
             Matcher itemMatcher = itemPattern.matcher(line);
             if (itemMatcher.find()) {
                 ExtractedTransaction item = new ExtractedTransaction();
@@ -319,9 +292,7 @@ public class OcrTextParserService {
                         item.setAmount(amount);
                         item.setType(TransactionType.EXPENSE);
                         items.add(item);
-                    } catch (NumberFormatException e) {
-                        // Skip
-                    }
+                    } catch (NumberFormatException e) {}
                 }
             }
         }
@@ -329,9 +300,6 @@ public class OcrTextParserService {
         return items;
     }
     
-    /**
-     * Check if line is not an item (header/footer)
-     */
     private boolean isNonItemLine(String line) {
         String upperLine = line.toUpperCase();
         return upperLine.contains("TOTAL") || upperLine.contains("SUBTOTAL") ||
@@ -342,9 +310,6 @@ public class OcrTextParserService {
                upperLine.length() < 4;
     }
     
-    /**
-     * Create transaction with retry mechanism
-     */
     private Transaction createTransactionWithRetry(User user, BankAccount bankAccount, 
                                                     ParsedData data, String fullText) {
         int maxRetries = 3;
@@ -353,19 +318,13 @@ public class OcrTextParserService {
                 return createTransaction(user, bankAccount, data, fullText);
             } catch (Exception e) {
                 System.err.println("Transaction creation attempt " + attempt + " failed: " + e.getMessage());
-                if (attempt == maxRetries) {
-                    return null;
-                }
-                // Small delay before retry
+                if (attempt == maxRetries) return null;
                 try { Thread.sleep(100); } catch (InterruptedException ie) {}
             }
         }
         return null;
     }
     
-    /**
-     * Create transaction from extracted data
-     */
     private Transaction createTransaction(User user, BankAccount bankAccount, 
                                           ParsedData data, String fullText) {
         try {
@@ -380,11 +339,9 @@ public class OcrTextParserService {
             transaction.setStatus("COMPLETED");
             transaction.setFlagged(false);
             
-            // Auto-categorize
             String categoryText = data.vendorName + " " + data.receiptType;
             transaction.setCategory(categorizationService.categorizeTransaction(categoryText));
             
-            // Update bank account balance
             if (transaction.getType() == TransactionType.EXPENSE) {
                 bankAccount.setCurrentBalance(bankAccount.getCurrentBalance().subtract(data.amount));
             } else {
@@ -398,28 +355,21 @@ public class OcrTextParserService {
                                ", Amount=₹" + data.amount + 
                                ", Desc=" + transaction.getDescription());
             return saved;
-            
         } catch (Exception e) {
             System.err.println("❌ Failed to create transaction: " + e.getMessage());
             throw new RuntimeException("Transaction creation failed", e);
         }
     }
     
-    /**
-     * Determine transaction type from parsed data
-     */
     private TransactionType determineTransactionType(ParsedData data) {
         if (data.receiptType.equals("INCOME") || 
-            data.vendorName.toUpperCase().contains("SALARY") ||
-            data.vendorName.toUpperCase().contains("REFUND")) {
+            (data.vendorName != null && data.vendorName.toUpperCase().contains("SALARY")) ||
+            (data.vendorName != null && data.vendorName.toUpperCase().contains("REFUND"))) {
             return TransactionType.INCOME;
         }
         return TransactionType.EXPENSE;
     }
     
-    /**
-     * Build description for transaction
-     */
     private String buildDescription(ParsedData data) {
         StringBuilder desc = new StringBuilder();
         if (data.vendorName != null && !data.vendorName.equals("Unknown Vendor")) {
@@ -439,9 +389,6 @@ public class OcrTextParserService {
         return desc.length() > 100 ? desc.substring(0, 97) + "..." : desc.toString();
     }
     
-    /**
-     * Update document status after processing
-     */
     private void updateDocumentStatus(OcrDocument document, ParsedData data, boolean success) {
         document.setProcessed(true);
         document.setProcessingStatus(success ? "COMPLETED" : "PARTIAL");
@@ -456,12 +403,12 @@ public class OcrTextParserService {
     }
     
     /**
-     * Clean and normalize text
+     * ✅ FIXED: Clean and normalize text (was called normalizeText before)
      */
     private String cleanText(String text) {
         if (text == null) return "";
         
-        // Remove extra whitespace and newlines
+        // Remove extra whitespace
         String cleaned = text.replaceAll("\\r\\n|\\r|\\n", " ")
                              .replaceAll("\\s+", " ")
                              .trim();
@@ -481,13 +428,9 @@ public class OcrTextParserService {
         return cleaned;
     }
     
-    /**
-     * Extract vendor name using multiple strategies
-     */
     private String extractVendorName(String text) {
         String[] lines = text.split("\\n");
         
-        // Strategy 1: Look for business name in first 5 lines
         for (int i = 0; i < Math.min(8, lines.length); i++) {
             String line = lines[i].trim().toUpperCase();
             if (isValidVendorLine(line)) {
@@ -495,7 +438,6 @@ public class OcrTextParserService {
             }
         }
         
-        // Strategy 2: Look for specific patterns
         Pattern[] vendorPatterns = {
             Pattern.compile("(HOTEL\\s+[A-Z\\s]+)", Pattern.CASE_INSENSITIVE),
             Pattern.compile("(RESTAURANT\\s+[A-Z\\s]+)", Pattern.CASE_INSENSITIVE),
@@ -513,9 +455,6 @@ public class OcrTextParserService {
         return "Unknown Vendor";
     }
     
-    /**
-     * Check if line is a valid vendor line
-     */
     private boolean isValidVendorLine(String line) {
         if (line.contains("RECEIPT") || line.contains("INVOICE") || 
             line.contains("BILL") || line.contains("THANK YOU") ||
@@ -529,9 +468,6 @@ public class OcrTextParserService {
         return true;
     }
     
-    /**
-     * Capitalize words in a string
-     */
     private String capitalizeWords(String text) {
         String[] words = text.toLowerCase().split(" ");
         StringBuilder result = new StringBuilder();
@@ -545,9 +481,6 @@ public class OcrTextParserService {
         return result.toString().trim();
     }
     
-    /**
-     * Extract date using multiple patterns
-     */
     private LocalDate extractDate(String text) {
         for (Pattern pattern : DATE_PATTERNS) {
             Matcher matcher = pattern.matcher(text);
@@ -558,15 +491,15 @@ public class OcrTextParserService {
                         int second = Integer.parseInt(matcher.group(2));
                         int third = Integer.parseInt(matcher.group(3));
                         
-                        // Determine date format
-                        if (third >= 1000) { // Year is 4 digits
-                            if (first > 31) { // YYYY-MM-DD
-                                return LocalDate.of(first, second, third);
-                            } else { // DD-MM-YYYY
-                                return LocalDate.of(third, second, first);
-                            }
-                        } else if (third >= 0 && third < 100) { // Two-digit year
-                            int year = 2000 + third;
+                        if (third >= 1000) {
+                            // YYYY-MM-DD format
+                            return LocalDate.of(third, second, first);
+                        } else if (first > 31) {
+                            // YYYY-MM-DD (alternative)
+                            return LocalDate.of(first, second, third);
+                        } else {
+                            // DD-MM-YYYY or DD-MM-YY
+                            int year = third >= 100 ? third : 2000 + third;
                             return LocalDate.of(year, second, first);
                         }
                     }
@@ -578,9 +511,6 @@ public class OcrTextParserService {
         return LocalDate.now();
     }
     
-    /**
-     * Detect receipt type
-     */
     private String detectReceiptType(String text) {
         String upperText = text.toUpperCase();
         
@@ -610,9 +540,6 @@ public class OcrTextParserService {
         return "GENERAL";
     }
     
-    /**
-     * Batch process all unprocessed OCR documents
-     */
     @Transactional
     public void batchProcessDocuments() {
         System.out.println("========== BATCH PROCESSING STARTED ==========");
@@ -641,7 +568,8 @@ public class OcrTextParserService {
         System.out.println("❌ Failed: " + failCount);
     }
     
-    // Inner classes
+    // ==================== INNER CLASSES ====================
+    
     public static class ParsedData {
         String vendorName = "Unknown Vendor";
         LocalDate transactionDate = LocalDate.now();
@@ -657,7 +585,6 @@ public class OcrTextParserService {
         private BigDecimal unitPrice;
         private TransactionType type;
         
-        // Getters and Setters
         public String getDescription() { return description; }
         public void setDescription(String description) { this.description = description; }
         public BigDecimal getAmount() { return amount; }
@@ -681,7 +608,6 @@ public class OcrTextParserService {
         private int transactionsCreated = 0;
         private String errorMessage;
         
-        // Getters and Setters
         public Long getDocumentId() { return documentId; }
         public void setDocumentId(Long documentId) { this.documentId = documentId; }
         

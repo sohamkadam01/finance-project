@@ -6,7 +6,6 @@ import com.College_project.project.repository.OcrDocumentRepository;
 import com.College_project.project.repository.UserRepository;
 import com.College_project.project.service.OcrServiceClient;
 import com.College_project.project.service.OcrTextParserService;
-import com.College_project.project.service.OcrProcessingService;
 import com.College_project.project.security.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,10 +36,7 @@ public class OcrController {
     private UserRepository userRepository;
     
     @Autowired
-    private OcrProcessingService ocrProcessingService;
-
-    @Autowired
-private OcrTextParserService ocrTextParserService;
+    private OcrTextParserService ocrTextParserService;  // ✅ Properly autowired
     
     @Value("${spring.servlet.multipart.max-file-size:10MB}")
     private String maxFileSize;
@@ -64,90 +60,88 @@ private OcrTextParserService ocrTextParserService;
         return ResponseEntity.ok(response);
     }
 
-
     @PostMapping("/process/{documentId}")
-public ResponseEntity<?> processDocument(
-        @PathVariable Long documentId,
-        Authentication authentication) {
-    
-    if (authentication == null || !authentication.isAuthenticated()) {
-        return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+    public ResponseEntity<?> processDocument(
+            @PathVariable Long documentId,
+            Authentication authentication) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+        }
+        
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            OcrTextParserService.ProcessingResult result = ocrTextParserService.processOcrDocument(documentId, userDetails.getId());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Document processed successfully!");
+            response.put("summary", result.toSummary());
+            response.put("extractedItems", result.getExtractedTransactions());
+            response.put("transactionsCreated", result.getCreatedTransactions().size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
-    
-    UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-    
-    try {
-        OcrTextParserService.ProcessingResult result = ocrTextParserService.processOcrDocument(documentId, userDetails.getId());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Document processed successfully!");
-        response.put("summary", result.toSummary());
-        response.put("extractedItems", result.getExtractedTransactions());
-        response.put("transactionsCreated", result.getCreatedTransactions().size());
-        
-        return ResponseEntity.ok(response);
-        
-    } catch (Exception e) {
-        Map<String, String> error = new HashMap<>();
-        error.put("error", e.getMessage());
-        return ResponseEntity.badRequest().body(error);
-    }
-}
 
-@PostMapping("/process-all")
-public ResponseEntity<?> processAllDocuments(Authentication authentication) {
-    
-    if (authentication == null || !authentication.isAuthenticated()) {
-        return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+    @PostMapping("/process-all")
+    public ResponseEntity<?> processAllDocuments(Authentication authentication) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+        }
+        
+        try {
+            ocrTextParserService.batchProcessDocuments();
+            
+            Map<String, String> response = new HashMap<>();
+            response.put("success", "true");
+            response.put("message", "All pending documents processed successfully!");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
-    
-    try {
-        ocrTextParserService.batchProcessDocuments();
-        
-        Map<String, String> response = new HashMap<>();
-        response.put("success", "true");
-        response.put("message", "All pending documents processed successfully!");
-        
-        return ResponseEntity.ok(response);
-        
-    } catch (Exception e) {
-        Map<String, String> error = new HashMap<>();
-        error.put("error", e.getMessage());
-        return ResponseEntity.badRequest().body(error);
-    }
-}
 
-@GetMapping("/document/{documentId}/analysis")
-public ResponseEntity<?> getDocumentAnalysis(
-        @PathVariable Long documentId,
-        Authentication authentication) {
-    
-    if (authentication == null || !authentication.isAuthenticated()) {
-        return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+    @GetMapping("/document/{documentId}/analysis")
+    public ResponseEntity<?> getDocumentAnalysis(
+            @PathVariable Long documentId,
+            Authentication authentication) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+        }
+        
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        OcrDocument document = ocrDocumentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+        
+        if (!document.getUser().getUserId().equals(userDetails.getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
+        }
+        
+        Map<String, Object> analysis = new HashMap<>();
+        analysis.put("documentId", document.getDocumentId());
+        analysis.put("filename", document.getFilename());
+        analysis.put("uploadedAt", document.getUploadedAt());
+        analysis.put("processed", document.isProcessed());
+        analysis.put("extractedAmount", document.getExtractedAmount());
+        analysis.put("extractedDate", document.getExtractedDate());
+        analysis.put("extractedVendor", document.getExtractedVendor());
+        analysis.put("fullText", document.getExtractedText());
+        
+        return ResponseEntity.ok(analysis);
     }
-    
-    UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-    OcrDocument document = ocrDocumentRepository.findById(documentId)
-            .orElseThrow(() -> new RuntimeException("Document not found"));
-    
-    if (!document.getUser().getUserId().equals(userDetails.getId())) {
-        return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
-    }
-    
-    Map<String, Object> analysis = new HashMap<>();
-    analysis.put("documentId", document.getDocumentId());
-    analysis.put("filename", document.getFilename());
-    analysis.put("uploadedAt", document.getUploadedAt());
-    analysis.put("processed", document.isProcessed());
-    analysis.put("extractedAmount", document.getExtractedAmount());
-    analysis.put("extractedDate", document.getExtractedDate());
-    analysis.put("extractedVendor", document.getExtractedVendor());
-    analysis.put("fullText", document.getExtractedText());
-    
-    return ResponseEntity.ok(analysis);
-}
-
     
     @PostMapping("/extract")
     public ResponseEntity<?> extractTextFromImage(
@@ -203,9 +197,7 @@ public ResponseEntity<?> getDocumentAnalysis(
             
             // Save file temporarily
             File tempFile = File.createTempFile("ocr_", "_" + filename);
-            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                fos.write(file.getBytes());
-            }
+            file.transferTo(tempFile);
             
             try {
                 // Call Python OCR service

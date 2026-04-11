@@ -17,6 +17,8 @@ const InvestmentsTable = ({ investments, loading, onUpdateValue, onDelete }) => 
     );
   }
 
+
+
   if (!investments || investments.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
@@ -175,4 +177,4 @@ const InvestmentsTable = ({ investments, loading, onUpdateValue, onDelete }) => 
   );
 };
 
-export default InvestmentsTable;
+export default InvestmentsTable;  // ✅ CORRECT - with 'n'

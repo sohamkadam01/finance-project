@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './index.css'
 import Intropage from './pages/intropage.jsx'
+import AnomalyDetection from './pages/AnomalyDetection';
+import Notifications from './pages/Notifications';
+
 import BillReminders from './pages/BillReminders';
 import Login from './components/Login.jsx'
 import Register from './components/Register.jsx'
@@ -29,6 +32,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               </PrivateRoute>
             } 
           />
+          <Route 
+  path="/notifications" 
+  element={
+    <PrivateRoute>
+      <Notifications />
+    </PrivateRoute>
+  } 
+/>
           <Route 
   path="/investments" 
   element={
@@ -62,6 +73,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </PrivateRoute>
   } 
 />
+
+<Route 
+  path="/anomaly-detection" 
+  element={
+    <PrivateRoute>
+      <AnomalyDetection />
+    </PrivateRoute>
+  } 
+/>
           <Route 
             path="/transactions" 
             element={
@@ -76,3 +96,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </AuthProvider>
   </React.StrictMode>,
 )
+
+
+// Add route

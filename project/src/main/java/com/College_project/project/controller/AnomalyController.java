@@ -1,8 +1,10 @@
 package com.College_project.project.controller;
 
 import com.College_project.project.DTOs.AnomalyRequest;
+import com.College_project.project.DTOs.AnomalyStatisticsDTO;
 import com.College_project.project.models.Anomaly;
 import com.College_project.project.service.AnomalyDetectionService;
+import com.College_project.project.service.AnomalyStatisticsService;
 import com.College_project.project.security.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,9 @@ public class AnomalyController {
     
     @Autowired
     private AnomalyDetectionService anomalyDetectionService;
+
+    @Autowired
+private AnomalyStatisticsService anomalyStatisticsService;
     
     @GetMapping("/my-anomalies")
     public ResponseEntity<?> getUserAnomalies(Authentication authentication) {
@@ -75,4 +80,54 @@ public class AnomalyController {
         
         return ResponseEntity.ok(stats);
     }
+
+    /**
+ * GET /api/anomalies/statistics
+ * Get anomaly detection statistics
+ */
+@GetMapping("/statistics")
+public ResponseEntity<?> getAnomalyStatistics(Authentication authentication) {
+    try {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        AnomalyStatisticsDTO statistics = anomalyStatisticsService.getAnomalyStatistics(userDetails.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("statistics", statistics);
+        
+        return ResponseEntity.ok(response);
+        
+    } catch (Exception e) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", e.getMessage());
+        return ResponseEntity.badRequest().body(error);
+    }
+}
+
+/**
+ * GET /api/anomalies/statistics/overview
+ * Get simplified overview statistics for dashboard
+ */
+@GetMapping("/statistics/overview")
+public ResponseEntity<?> getAnomalyOverview(Authentication authentication) {
+    try {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        AnomalyStatisticsDTO statistics = anomalyStatisticsService.getAnomalyStatistics(userDetails.getId());
+        
+        Map<String, Object> overview = new HashMap<>();
+        overview.put("totalAnomalies", statistics.getOverview().getTotalAnomalies());
+        overview.put("pendingReview", statistics.getOverview().getPendingReview());
+        overview.put("confirmedFraud", statistics.getOverview().getConfirmedFraud());
+        overview.put("falseAlarms", statistics.getOverview().getFalseAlarms());
+        overview.put("detectionRate", statistics.getOverview().getDetectionRate());
+        overview.put("resolutionRate", statistics.getOverview().getResolutionRate());
+        
+        return ResponseEntity.ok(overview);
+        
+    } catch (Exception e) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", e.getMessage());
+        return ResponseEntity.badRequest().body(error);
+    }
+}
 }

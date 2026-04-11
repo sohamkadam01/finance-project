@@ -19,12 +19,12 @@ const PortfolioSummary = ({ summary, loading }) => {
 
   const isPositive = summary.totalProfitLoss >= 0;
   const profitLossColor = isPositive ? 'text-green-600' : 'text-red-600';
-  const profitLossIcon = isPositive ? <TrendingUp size={18} /> : <TrendingDown size={18} />;
 
   const cards = [
     {
       title: 'Total Invested',
-      value: `₹${summary.totalInvested?.toLocaleString() || 0}`,
+      // Fallback to common key names like amountInvested if totalInvested is missing
+      value: `₹${(summary.totalInvested ?? summary.amountInvested ?? summary.totalAmountInvested ?? 0).toLocaleString()}`,
       icon: DollarSign,
       color: 'text-blue-600',
       bg: 'bg-blue-50'
@@ -40,7 +40,7 @@ const PortfolioSummary = ({ summary, loading }) => {
       title: 'Total Returns',
       value: `₹${Math.abs(summary.totalProfitLoss || 0).toLocaleString()}`,
       subValue: `${Math.abs(summary.totalReturnsPercentage || 0).toFixed(1)}%`,
-      icon: profitLossIcon,
+      icon: isPositive ? TrendingUp : TrendingDown,
       color: profitLossColor,
       bg: isPositive ? 'bg-green-50' : 'bg-red-50',
       isPositive: isPositive
@@ -61,7 +61,7 @@ const PortfolioSummary = ({ summary, loading }) => {
         <div key={idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className={`p-2 rounded-xl ${card.bg}`}>
-              <card.icon size={18} className={card.color} />
+              {React.createElement(card.icon, { size: 18, className: card.color })}
             </div>
             {card.subValue && (
               <span className={`text-xs font-medium ${card.isPositive === false ? 'text-red-600' : 'text-green-600'}`}>
@@ -71,7 +71,7 @@ const PortfolioSummary = ({ summary, loading }) => {
           </div>
           <p className="text-2xl font-semibold text-gray-900">{card.value}</p>
           <p className="text-sm text-gray-500 mt-1">{card.title}</p>
-          {card.subValue && !card.isPositive !== undefined && (
+          {card.subValue && card.isPositive !== undefined && (
             <p className="text-xs text-gray-400 mt-1">{card.subValue}</p>
           )}
         </div>

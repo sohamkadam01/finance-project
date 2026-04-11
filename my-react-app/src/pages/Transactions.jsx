@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  LayoutDashboard, Wallet, Target, TrendingUp, CreditCard, Settings, 
-  Bell, Search, LogOut, Plus, ArrowUpDown 
-} from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
@@ -19,6 +16,7 @@ import MonthlySummary from '../components/Transactions/MonthlySummary';
 import TransactionDetailsModal from '../components/Transactions/TransactionDetailsModal';
 import EditTransactionModal from '../components/Transactions/EditTransactionModal';
 import AddTransactionModal from '../components/Dashboard/AddTransactionModal';
+import Layout from '../components/Layout/Layout'; // Import the Layout component
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
@@ -46,7 +44,7 @@ const getCategoryIcon = (categoryName) => {
 
 const Transactions = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   
   // State
   const [transactions, setTransactions] = useState([]);
@@ -210,16 +208,6 @@ const Transactions = () => {
     }
   };
 
-  const userName = user?.name || 'User';
-  const userInitials = userName !== 'User' 
-    ? userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'U';
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
   const containerVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { 
@@ -230,151 +218,54 @@ const Transactions = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#FDFDFF]">
-      {/* Sidebar */}
-      <aside className="w-20 lg:w-64 bg-white border-r border-gray-100 hidden md:flex flex-col sticky h-screen top-0">
-        <div className="p-6 flex justify-center lg:justify-start">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-              <TrendingUp size={22} strokeWidth={2.5} />
-            </div>
-            <span className="hidden lg:block font-bold text-xl tracking-tight text-slate-800">FinCore</span>
+    <Layout>
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Transactions</h1>
+            <p className="text-gray-500 text-sm mt-1">Manage and track all your financial activities</p>
           </div>
-        </div>
-        
-        <nav className="flex-1 px-4 mt-4 space-y-1">
           <button
-            onClick={() => navigate('/dashboard')}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-gray-500 hover:bg-gray-50"
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <LayoutDashboard size={20} />
-            <span className="hidden lg:block font-medium">Dashboard</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-blue-600 bg-blue-50"
-          >
-            <CreditCard size={20} />
-            <span className="hidden lg:block font-medium">Transactions</span>
-          </button>
-          <button
-            onClick={() => navigate('/investments')}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-gray-500 hover:bg-gray-50"
-          >
-            <TrendingUp size={20} />
-            <span className="hidden lg:block font-medium">Investments</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-gray-500 hover:bg-gray-50"
-          >
-            <Target size={20} />
-            <span className="hidden lg:block font-medium">Goals</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-gray-500 hover:bg-gray-50"
-          >
-            <Settings size={20} />
-            <span className="hidden lg:block font-medium">Settings</span>
-          </button>
-        </nav>
-
-        <div className="p-4 mt-auto border-t border-gray-100">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-50"
-          >
-            <LogOut size={20} />
-            <span className="hidden lg:block font-medium">Logout</span>
+            <Plus size={18} />
+            Add Transaction
           </button>
         </div>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        {/* Header */}
-        <header className="h-20 bg-white/60 backdrop-blur-xl sticky top-0 z-50 border-b border-gray-100 flex items-center justify-between px-4 md:px-8">
-          <div className="flex items-center gap-6 flex-1">
-            <h2 className="hidden lg:block text-lg font-bold text-slate-800">Transactions</h2>
-            <div className="flex items-center gap-3 bg-gray-100/80 px-4 py-2.5 rounded-2xl w-full max-w-md">
-              <Search size={18} className="text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search transactions..." 
-                className="bg-transparent border-none outline-none text-sm w-full font-medium"
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="p-2.5 text-gray-500 hover:bg-gray-100 rounded-full transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white"></span>
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white text-sm">
-                {userInitials}
-              </div>
-              <div className="hidden lg:block">
-                <p className="text-sm font-semibold text-gray-800">{userName}</p>
-                <p className="text-xs text-gray-400">{user?.email || ''}</p>
-              </div>
-            </div>
-          </div>
-        </header>
+        {/* Stats Cards */}
+        <TransactionStats transactions={filteredTransactions} loading={loading} />
 
-        <motion.div 
-          initial="hidden"
-          animate="visible"
-          variants={containerVariants}
-          className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8"
-        >
-          {/* Header Section */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Transactions</h1>
-              <p className="text-gray-500 text-sm mt-1">Manage and track all your financial activities</p>
-            </div>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={18} />
-              Add Transaction
-            </button>
-          </div>
+        {/* Two Column Layout for Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <IncomeExpenseChart data={chartData()} loading={loading} />
+          <CategoryPieChart data={categoryData} loading={loading} />
+        </div>
 
-          {/* Stats Cards */}
-          <TransactionStats transactions={filteredTransactions} loading={loading} />
+        {/* Top Spending Categories and Monthly Summary */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TopSpendingCategories data={categoryData.slice(0, 5)} loading={loading} />
+          <MonthlySummary selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+        </div>
 
-          {/* Two Column Layout for Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <IncomeExpenseChart data={chartData()} loading={loading} />
-            <CategoryPieChart data={categoryData} loading={loading} />
-          </div>
+        {/* Filters */}
+        <TransactionFilters 
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onExport={handleExport}
+        />
 
-          {/* Top Spending Categories and Monthly Summary */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TopSpendingCategories data={categoryData.slice(0, 5)} loading={loading} />
-            <MonthlySummary selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
-          </div>
-
-          {/* Filters */}
-          <TransactionFilters 
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onExport={handleExport}
-          />
-
-          {/* Transaction List */}
-          <TransactionList 
-            transactions={filteredTransactions}
-            loading={loading}
-            onViewDetails={handleViewDetails}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
-        </motion.div>
-      </main>
+        {/* Transaction List */}
+        <TransactionList 
+          transactions={filteredTransactions}
+          loading={loading}
+          onViewDetails={handleViewDetails}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </div>
 
       {/* Modals */}
       <TransactionDetailsModal 
@@ -395,7 +286,7 @@ const Transactions = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={fetchTransactions}
       />
-    </div>
+    </Layout>
   );
 };
 

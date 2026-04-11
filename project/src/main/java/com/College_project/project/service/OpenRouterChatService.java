@@ -12,7 +12,7 @@ import java.util.*;
 @Service
 public class OpenRouterChatService {
     
-    @Value("${openrouter.api.key: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}")
+    @Value("${openrouter.api.key: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}")
     private String apiKey;
     
     private final RestTemplate restTemplate = new RestTemplate();
