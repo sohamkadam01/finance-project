@@ -1,7 +1,8 @@
 """
 Production-Ready OCR Microservice for Finance Platform
-Enhanced with Multiple OCR Engines, Image Preprocessing, and Robust Error Handling
+Enhanced with Multiple OCR Engines, Image Preprocessing, and AI Text Understanding
 """
+
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
@@ -27,11 +28,13 @@ from concurrent.futures import ThreadPoolExecutor
 import pytesseract
 from pathlib import Path
 import sys
+from dotenv import load_dotenv
 
-# At the start of your application:
-# if sys.platform == 'win32':
-#     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-#     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# Load environment variables immediately
+load_dotenv()
+
+# Import AI analyzer
+from ai_text_analyzer import FinancialDocumentAnalyzer, format_financial_data_for_display
 # ------------------- CONFIG -------------------
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -39,12 +42,18 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp",
 ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/bmp", "image/tiff", "image/webp", "application/pdf"]
 MODEL_DIR = "./models"
 CACHE_DIR = "./cache"
+AI_CACHE_DIR = "./ai_cache"  # Separate cache for AI results
 MAX_CACHE_SIZE = 100  # Max number of cached results
-# TIMEOUT SESSION REMOVED - No timeout limit for OCR processing
+ENABLE_AI_ANALYSIS = os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true"
+
+# AI Model Configuration
+MODEL_NAME = "stepfun/step-3.5-flash"  # Add this line
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")  # Add this line
 
 # ------------------- CACHE SETUP -------------------
 
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(AI_CACHE_DIR, exist_ok=True)
 
 # ------------------- LOGGING -------------------
 
@@ -70,9 +79,9 @@ logger.addHandler(error_handler)
 # ------------------- APP INIT -------------------
 
 app = FastAPI(
-    title="Finance OCR Service",
-    description="Advanced OCR service for financial documents with multiple engines",
-    version="3.0.0"
+    title="Finance OCR Service with AI",
+    description="Advanced OCR service for financial documents with multiple OCR engines and AI text understanding",
+    version="4.0.0"
 )
 
 # Add CORS middleware
@@ -119,15 +128,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Tesseract not available: {str(e)}")
 
+# Initialize AI analyzer (will be created per request for session management)
+# But we keep a global reference
+ai_analyzer = None
+
 # ------------------- CACHE MANAGEMENT -------------------
 
-def get_cache_key(content: bytes) -> str:
+def get_cache_key(content: bytes, include_ai: bool = False) -> str:
     """Generate cache key from file content"""
-    return hashlib.md5(content).hexdigest()
+    key = hashlib.md5(content).hexdigest()
+    if include_ai:
+        key = f"ai_{key}"
+    return key
 
-def get_cached_result(cache_key: str) -> Optional[str]:
+def get_cached_result(cache_key: str, cache_dir: str = CACHE_DIR) -> Optional[str]:
     """Retrieve cached OCR result"""
-    cache_file = os.path.join(CACHE_DIR, f"{cache_key}.json")
+    cache_file = os.path.join(cache_dir, f"{cache_key}.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
@@ -136,31 +152,31 @@ def get_cached_result(cache_key: str) -> Optional[str]:
                 cache_age = datetime.now() - datetime.fromisoformat(data['timestamp'])
                 if cache_age.days < 30:
                     logger.info(f"Cache hit for key: {cache_key}")
-                    return data['text']
+                    return data['result']
         except Exception as e:
             logger.warning(f"Cache read failed: {str(e)}")
     return None
 
-def cache_result(cache_key: str, text: str):
-    """Cache OCR result"""
-    cache_file = os.path.join(CACHE_DIR, f"{cache_key}.json")
+def cache_result(cache_key: str, result: any, cache_dir: str = CACHE_DIR):
+    """Cache OCR or AI result"""
+    cache_file = os.path.join(cache_dir, f"{cache_key}.json")
     try:
         with open(cache_file, 'w', encoding='utf-8') as f:
             json.dump({
                 'timestamp': datetime.now().isoformat(),
-                'text': text
-            }, f)
+                'result': result
+            }, f, default=str)
         logger.info(f"Cached result for key: {cache_key}")
         
         # Clean old cache files
-        cleanup_old_cache()
+        cleanup_old_cache(cache_dir)
     except Exception as e:
         logger.warning(f"Cache write failed: {str(e)}")
 
-def cleanup_old_cache():
+def cleanup_old_cache(cache_dir: str):
     """Remove old cache files exceeding limit"""
     try:
-        files = sorted(Path(CACHE_DIR).glob("*.json"), key=os.path.getmtime)
+        files = sorted(Path(cache_dir).glob("*.json"), key=os.path.getmtime)
         while len(files) > MAX_CACHE_SIZE:
             files[0].unlink()
             files.pop(0)
@@ -265,11 +281,6 @@ def ocr_with_tesseract(image: np.ndarray) -> str:
         logger.error(f"Tesseract failed: {str(e)}")
         return ""
 
-def ocr_with_paddle(image: np.ndarray) -> str:
-    """Placeholder for PaddleOCR (if installed)"""
-    # PaddleOCR would go here
-    return ""
-
 # ------------------- MAIN OCR FUNCTION -------------------
 
 def perform_multi_engine_ocr(image_bytes: bytes) -> Dict[str, str]:
@@ -339,15 +350,65 @@ def post_process_text(text: str) -> str:
     
     return text.strip()
 
-# ------------------- HELPER FUNCTIONS -------------------
+# ------------------- AI ANALYSIS FUNCTION -------------------
 
-@contextmanager
-def timeout_context(seconds: int):
-    """Context manager for timeout"""
-    try:
-        yield
-    except TimeoutError:
-        raise HTTPException(status_code=408, detail=f"Operation timed out after {seconds} seconds")
+async def analyze_text_with_ai(extracted_text: str, cache_key: str = None) -> Dict:
+    """
+    Analyze extracted text using AI to get structured financial data
+    """
+    if not ENABLE_AI_ANALYSIS:
+        return {"enabled": False, "message": "AI analysis is disabled"}
+    
+    if not extracted_text or len(extracted_text.strip()) < 20:
+        return {
+            "enabled": True,
+            "success": False,
+            "error": "Insufficient text for AI analysis",
+            "extracted_data": None
+        }
+    
+    # Check AI cache
+    if cache_key:
+        ai_cache_key = f"ai_{cache_key}"
+        cached_ai_result = get_cached_result(ai_cache_key, AI_CACHE_DIR)
+        if cached_ai_result:
+            try:
+                if isinstance(cached_ai_result, str):
+                    return json.loads(cached_ai_result)
+                return cached_ai_result
+            except:
+                pass
+    
+    # Perform AI analysis
+    async with FinancialDocumentAnalyzer() as analyzer:
+        result = await analyzer.analyze_text(extracted_text)
+        
+        if result.success and result.extracted_data:
+            formatted_data = format_financial_data_for_display(result.extracted_data)
+            response = {
+                "enabled": True,
+                "success": True,
+                "extracted_data": formatted_data,
+                "processing_time": result.processing_time,
+                "confidence_score": result.extracted_data.confidence_score
+            }
+            
+            # Cache AI result
+            if cache_key:
+                ai_cache_key = f"ai_{cache_key}"
+                cache_result(ai_cache_key, response, AI_CACHE_DIR)
+            
+            return response
+        else:
+            return {
+                "enabled": True,
+                "success": False,
+                "error": result.error or "Failed to analyze text",
+                "extracted_data": None,
+                "processing_time": result.processing_time
+            }
+
+# ------------------- HELPER FUNCTIONS -------------------
 
 def validate_file_sync(filename: str, content: bytes) -> Dict:
     """Synchronous file validation"""
@@ -386,13 +447,14 @@ def validate_file_sync(filename: str, content: bytes) -> Dict:
 @app.get("/")
 async def root():
     return {
-        "service": "Finance OCR Service",
+        "service": "Finance OCR Service with AI",
         "status": "running",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "engines": {
             "easyocr": easyocr_reader is not None,
             "tesseract": tesseract_available
         },
+        "ai_analysis": ENABLE_AI_ANALYSIS,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -404,6 +466,7 @@ async def health():
             "easyocr": easyocr_reader is not None,
             "tesseract": tesseract_available
         },
+        "ai_analysis": ENABLE_AI_ANALYSIS,
         "service": "ocr-service",
         "timestamp": datetime.now().isoformat()
     }
@@ -411,12 +474,21 @@ async def health():
 # ------------------- MAIN OCR ENDPOINT -------------------
 
 @app.post("/ocr/extract")
-async def extract_text(file: UploadFile = File(...), background_tasks: BackgroundTasks = None) -> Dict:
+async def extract_text(
+    file: UploadFile = File(...), 
+    enable_ai: bool = True,
+    background_tasks: BackgroundTasks = None
+) -> Dict:
     """
     Extract text from uploaded image file using multiple OCR engines
+    Optionally analyze with AI to extract structured financial data
+    
+    Args:
+        file: Image file to process
+        enable_ai: Whether to perform AI analysis on extracted text
     """
     request_id = hashlib.md5(f"{file.filename}{datetime.now().isoformat()}".encode()).hexdigest()[:8]
-    logger.info(f"[{request_id}] 📄 Received file: {file.filename}")
+    logger.info(f"[{request_id}] 📄 Received file: {file.filename} (AI: {enable_ai})")
     
     # Check if at least one OCR engine is available
     if easyocr_reader is None and not tesseract_available:
@@ -433,10 +505,26 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
     
     # Check cache
-    cache_key = get_cache_key(content)
+    cache_key = get_cache_key(content, include_ai=False)
     cached_result = get_cached_result(cache_key)
     if cached_result:
-        logger.info(f"[{request_id}] Returning cached result")
+        logger.info(f"[{request_id}] Returning cached OCR result")
+        
+        # If AI analysis requested, try to get cached AI result or perform analysis
+        ai_result = None
+        if enable_ai and ENABLE_AI_ANALYSIS:
+            ai_cache_key = f"ai_{cache_key}"
+            cached_ai = get_cached_result(ai_cache_key, AI_CACHE_DIR)
+            if cached_ai:
+                ai_result = cached_ai
+            else:
+                # Perform AI analysis in background
+                background_tasks.add_task(
+                    analyze_and_cache_ai, 
+                    cached_result, 
+                    cache_key
+                )
+        
         return {
             "success": True,
             "request_id": request_id,
@@ -445,6 +533,7 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
             "text_length": len(cached_result),
             "word_count": len(cached_result.split()),
             "cached": True,
+            "ai_analysis": ai_result,
             "timestamp": datetime.now().isoformat()
         }
     
@@ -459,9 +548,9 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
     
     logger.info(f"[{request_id}] ✅ File validated: {validation['size_bytes']} bytes, type: {validation['extension']}")
     
-    # Process OCR without timeout - allowing unlimited time for text extraction
+    # Process OCR
     try:
-        # Run OCR in thread pool without any timeout restriction
+        # Run OCR in thread pool
         loop = asyncio.get_event_loop()
         ocr_result = await loop.run_in_executor(executor, perform_multi_engine_ocr, content)
         
@@ -481,15 +570,21 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
                 "confidence": "LOW",
                 "engine_used": engine_used,
                 "warning": "No text detected in the image. Try a clearer image.",
+                "ai_analysis": None,
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Cache result
-        background_tasks.add_task(cache_result, cache_key, extracted_text)
+        # Cache OCR result
+        background_tasks.add_task(cache_result, cache_key, extracted_text, CACHE_DIR)
+        
+        # Perform AI analysis if enabled
+        ai_result = None
+        if enable_ai and ENABLE_AI_ANALYSIS:
+            ai_result = await analyze_text_with_ai(extracted_text, cache_key)
         
         logger.info(f"[{request_id}] ✅ OCR successful! Engine: {engine_used}, Confidence: {confidence}, Length: {len(extracted_text)}")
         
-        return {
+        response = {
             "success": True,
             "request_id": request_id,
             "filename": file.filename,
@@ -500,21 +595,33 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
             "engine_used": engine_used,
             "file_size_bytes": validation["size_bytes"],
             "cached": False,
+            "ai_analysis": ai_result,
             "timestamp": datetime.now().isoformat()
         }
+        
+        return response
         
     except Exception as e:
         logger.error(f"[{request_id}] OCR processing failed: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
+async def analyze_and_cache_ai(extracted_text: str, cache_key: str):
+    """Background task to analyze and cache AI results"""
+    try:
+        result = await analyze_text_with_ai(extracted_text, cache_key)
+        logger.info(f"Background AI analysis completed for key: {cache_key}")
+    except Exception as e:
+        logger.error(f"Background AI analysis failed: {str(e)}")
+
 # ------------------- BATCH OCR ENDPOINT -------------------
 
 @app.post("/ocr/extract-batch")
-async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
+async def extract_batch(files: List[UploadFile] = File(...), enable_ai: bool = False) -> Dict:
     """
     Extract text from multiple images in parallel
+    AI analysis disabled for batch to improve performance
     """
-    logger.info(f"📚 Received batch request with {len(files)} files")
+    logger.info(f"📚 Received batch request with {len(files)} files (AI: {enable_ai})")
     
     results = []
     successful = 0
@@ -539,7 +646,7 @@ async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
             
             extracted_text = ocr_result.get('text', '')
             
-            return {
+            result = {
                 "index": idx,
                 "filename": file.filename,
                 "success": True,
@@ -550,6 +657,13 @@ async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
                 "engine_used": ocr_result.get('engine', 'unknown')
             }
             
+            # Add AI analysis if enabled (will increase processing time)
+            if enable_ai and ENABLE_AI_ANALYSIS and extracted_text:
+                ai_result = await analyze_text_with_ai(extracted_text)
+                result["ai_analysis"] = ai_result
+            
+            return result
+            
         except Exception as e:
             return {
                 "index": idx,
@@ -558,7 +672,7 @@ async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
                 "error": str(e)
             }
     
-    # Run all files in parallel without timeout
+    # Run all files in parallel
     tasks = [process_single_file(file, idx) for idx, file in enumerate(files)]
     batch_results = await asyncio.gather(*tasks)
     
@@ -576,7 +690,39 @@ async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
         "total_files": len(files),
         "successful": successful,
         "failed": failed,
+        "ai_enabled": enable_ai,
         "results": results,
+        "timestamp": datetime.now().isoformat()
+    }
+
+# ------------------- AI ONLY ENDPOINT -------------------
+
+@app.post("/analyze/text")
+async def analyze_text(text: str, background_tasks: BackgroundTasks = None) -> Dict:
+    """
+    Analyze pre-extracted text using AI to extract structured financial data
+    Useful when you already have the text from other sources
+    """
+    request_id = hashlib.md5(f"{text[:100]}{datetime.now().isoformat()}".encode()).hexdigest()[:8]
+    logger.info(f"[{request_id}] 📝 Received text for AI analysis (length: {len(text)})")
+    
+    if not ENABLE_AI_ANALYSIS:
+        raise HTTPException(status_code=503, detail="AI analysis is disabled")
+    
+    if not text or len(text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Text too short for analysis")
+    
+    # Generate cache key from text
+    cache_key = hashlib.md5(text.encode()).hexdigest()
+    
+    # Perform AI analysis
+    result = await analyze_text_with_ai(text, cache_key)
+    
+    return {
+        "success": result.get("success", False),
+        "request_id": request_id,
+        "text_length": len(text),
+        "analysis": result,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -586,19 +732,24 @@ async def extract_batch(files: List[UploadFile] = File(...)) -> Dict:
 async def stats():
     """Get service statistics"""
     cache_files = list(Path(CACHE_DIR).glob("*.json"))
+    ai_cache_files = list(Path(AI_CACHE_DIR).glob("*.json"))
     return {
-        "model": "Multi-Engine OCR",
+        "model": "Multi-Engine OCR with AI",
         "languages": ["en"],
         "engines": {
             "easyocr": easyocr_reader is not None,
             "tesseract": tesseract_available
+        },
+        "ai_analysis": {
+            "enabled": ENABLE_AI_ANALYSIS,
+            "model": MODEL_NAME,
+            "cache_size": len(ai_cache_files)
         },
         "gpu": False,
         "status": "active" if (easyocr_reader is not None or tesseract_available) else "inactive",
         "cache_size": len(cache_files),
         "max_file_size_mb": MAX_FILE_SIZE // 1024 // 1024,
         "allowed_formats": list(ALLOWED_EXTENSIONS),
-        "timeout_enabled": False,  # Indicate that timeout has been removed
         "timestamp": datetime.now().isoformat()
     }
 
@@ -642,18 +793,22 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("🚀 Starting Finance OCR Service v3.0 (No Timeout Mode)")
+    print("🚀 Starting Finance OCR Service v4.0 (with AI Understanding)")
     print("=" * 70)
     print(f"📁 Model Directory: {MODEL_DIR}")
     print(f"📄 Max File Size: {MAX_FILE_SIZE // 1024 // 1024}MB")
     print(f"🎨 Supported Formats: {', '.join(ALLOWED_EXTENSIONS)}")
     print(f"💾 Cache Directory: {CACHE_DIR}")
+    print(f"🤖 AI Cache Directory: {AI_CACHE_DIR}")
     print(f"⚙️  Max Cache Size: {MAX_CACHE_SIZE} files")
-    print(f"⏰ Timeout: DISABLED (No time limit for OCR processing)")
+    print(f"🧠 AI Analysis: {'✅ Enabled' if ENABLE_AI_ANALYSIS else '❌ Disabled'}")
     print("-" * 70)
     print("🧠 OCR Engines:")
     print(f"   • EasyOCR: {'✅ Available' if easyocr_reader else '❌ Not Available'}")
     print(f"   • Tesseract: {'✅ Available' if tesseract_available else '⚠️ Not Available (optional)'}")
+    if ENABLE_AI_ANALYSIS:
+        print(f"   • AI Model: {MODEL_NAME}")
+        print(f"   • OpenRouter API: {'✅ Configured' if OPENROUTER_API_KEY else '❌ Not Configured'}")
     print("-" * 70)
     print("📚 API Documentation: http://localhost:8000/docs")
     print("🏥 Health Check: http://localhost:8000/health")
