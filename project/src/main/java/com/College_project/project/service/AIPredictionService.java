@@ -41,7 +41,7 @@ public class AIPredictionService {
     @Autowired
     private StatisticalPredictionService statisticalPredictionService;
     
-    @Value("${openrouter.api.key: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}")
+    @Value("${openrouter.api.key:}")
     private String apiKey;
     
     private final RestTemplate restTemplate = new RestTemplate();
